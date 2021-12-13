@@ -1,0 +1,53 @@
+on: 
+  workflow_call:
+    inputs:
+      packageName:
+        required: true
+        type: string
+      runUnitTests:
+        required: true
+        type: boolean
+      runIntegrationTests:
+        required: true
+        type: boolean
+    secrets:
+      patToken:
+        required: false
+      patUsername:
+        required: false
+
+jobs:
+  build_and_publish_nuget_package_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: Setup .NET Core @ Latest
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '6.0.x'
+          source-url: https://nuget.pkg.github.com/UBCO-Bikes/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{secrets.patToken}}
+
+      - name: Run unit tests
+        if: ${{ inputs.runUnitTests }}
+        run: |  
+          cd ./${{ inputs.packageName }}.Package
+          dotnet test ./${{ inputs.packageName }}.UnitTests
+
+      - name: Run integration tests
+        if: ${{ inputs.runIntegrationTests }}
+        run: |  
+          cd ./${{ inputs.packageName }}.Package
+          docker-compose -f ./docker-compose.yml up --build --force-recreate --exit-code-from integration-tests
+        env:
+          PAT_TOKEN: ${{secrets.patToken}}
+          PAT_USERNAME: ${{secrets.patUsername}}
+
+      - name: Generate & publish NuGet package
+        run: |  
+          cd ./${{ inputs.packageName }}.Package
+          dotnet pack -c Release -o out  
+          dotnet nuget push ./out/*.nupkg --no-symbols true
