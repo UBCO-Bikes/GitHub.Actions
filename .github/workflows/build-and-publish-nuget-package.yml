@@ -50,4 +50,4 @@ jobs:
         run: |  
           cd ./${{ inputs.packageName }}.Package
           dotnet pack -c Release -o out  
-          dotnet nuget push ./out/*.nupkg --no-symbols
+          dotnet nuget push ./out/*.nupkg --no-symbols --skip-duplicate
