@@ -1,4 +1,4 @@
-name: Build amd64 Docker Image
+name: dotnet build and push docker image for the supplied architecture
 on:
   workflow_call:
     inputs:

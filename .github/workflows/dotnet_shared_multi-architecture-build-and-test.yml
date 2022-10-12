@@ -1,4 +1,4 @@
-name: Multi-architecture build and optionally unit-test Docker Image
+name: dotnet multi-architecture build and optionally unit-test docker image
 on:
   workflow_call:
     inputs:

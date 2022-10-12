@@ -1,4 +1,4 @@
-name: Pull Request Unit Tests
+name: dotnet run unit tests
 on:
   workflow_call:
     inputs:
