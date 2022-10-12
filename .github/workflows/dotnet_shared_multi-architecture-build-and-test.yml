@@ -7,10 +7,7 @@ on:
         type: string
       architecture:
         required: true
-        type: choice
-        options:
-        - amd64
-        - arm64
+        type: string
       run-unit-tests:
         required: false
         default: false

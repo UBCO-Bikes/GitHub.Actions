@@ -10,10 +10,7 @@ on:
         type: string
       architecture:
         required: true
-        type: choice
-        options:
-        - amd64
-        - arm64
+        type: string
 
 jobs:
   build:
