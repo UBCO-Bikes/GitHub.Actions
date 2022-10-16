@@ -1,0 +1,18 @@
+name: dotnet run unit tests
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        required: true
+        type: string
+
+jobs:
+  unit-test:
+    name: Run unit tests
+    uses: ./.github/workflows/dotnet_shared_multi-architecture-build-and-test.yml
+    with:
+      image-name: ${{ inputs.image-name }}
+      architecture: amd64
+      run-unit-tests: true
+      build-image: false
+    secrets: inherit

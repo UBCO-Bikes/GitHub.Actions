@@ -1,0 +1,114 @@
+name: dotnet multi-architecture build and optionally unit-test docker image
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        required: true
+        type: string
+      architecture:
+        required: true
+        type: string
+      run-unit-tests:
+        required: false
+        default: false
+        type: boolean
+      build-image:
+        required: false
+        default: false
+        type: boolean
+      version:
+        required: false
+        type: string
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-20.04
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: Prepare build parameters
+        id: prepare-build
+        run: |
+          if [[ "${{ inputs.architecture }}" == "arm64" ]]; then
+            buildxDriver=docker-container
+            requiresEmulation=true
+            imageTagSuffix="-arm64"
+          else
+            buildxDriver=docker
+            requiresEmulation=false
+            imageTagSuffix=""
+          fi
+          echo "target branch = $buildxDriver"
+          echo "image tag suffix = $imageTagSuffix"
+          echo '::echo::on' 
+          echo "::set-output name=buildx-driver::$buildxDriver"
+          echo "::set-output name=requires-emulation::$requiresEmulation"
+          echo "::set-output name=image-tag-suffix::$imageTagSuffix"
+
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: Set up QEMU
+        if: steps.prepare-build.outputs.requires-emulation == 'true'
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: arm64
+
+      - name: Set up docker buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          driver: ${{ steps.prepare-build.outputs.buildx-driver }}
+
+      - name: Create nuget config
+        run: |
+          echo "<configuration><packageSources><add key=\"github\" value=\"https://nuget.pkg.github.com/UBCO-Bikes/index.json\" /></packageSources><packageSourceCredentials><github><add key=\"Username\" value=\"${{ secrets.GH_USERNAME }}\" /><add key=\"ClearTextPassword\" value=\"${{ secrets.GH_TOKEN }}\" /></github></packageSourceCredentials></configuration>" > nuget.config
+
+      - name: Build Unit Test docker image
+        if: ${{ inputs.run-unit-tests }}
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          target: unittest
+          push: false
+          tags: |
+            ${{ inputs.image-name }}:ut
+          secret-files: |
+            "nuget_config=nuget.config"
+
+      - name: Run Unit Tests
+        if: ${{ inputs.run-unit-tests }}
+        run: docker run ${{ inputs.image-name }}:ut
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.build-image }}
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.GH_ACTIONS_SHARED_SERVICES_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - name: Login to Amazon ECR
+        if: ${{ inputs.build-image }}
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set Image names and tags
+        if: ${{ inputs.build-image }}
+        run: |
+          echo "VERSIONED_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.version }}${{ steps.prepare-build.outputs.image-tag-suffix }}" >> $GITHUB_ENV  
+          echo "LATEST_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:latest${{ steps.prepare-build.outputs.image-tag-suffix }}" >> $GITHUB_ENV
+
+      - name: Build and push to ECR
+        if: ${{ inputs.build-image }}
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: |
+            linux/${{ inputs.architecture }}
+          push: true
+          tags: |
+            ${{ env.VERSIONED_IMAGE }}
+            ${{ env.LATEST_IMAGE }}
+          secret-files: |
+            "nuget_config=nuget.config"
