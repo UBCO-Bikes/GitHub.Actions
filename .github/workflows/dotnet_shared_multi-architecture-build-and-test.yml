@@ -43,15 +43,15 @@ jobs:
           echo "target branch = $buildxDriver"
           echo "image tag suffix = $imageTagSuffix"
           echo '::echo::on' 
-          echo "::set-output name=buildx-driver::$buildxDriver"
-          echo "::set-output name=requires-emulation::$requiresEmulation"
-          echo "::set-output name=image-tag-suffix::$imageTagSuffix"
+          echo "BUILDX_DRIVER=$buildxDriver" >> $GITHUB_OUTPUT
+          echo "REQUIRES_EMULATION=$requiresEmulation" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG_SUFFIX=$imageTagSuffix" >> $GITHUB_OUTPUT
 
       - name: Check out the repo
         uses: actions/checkout@v3
 
       - name: Set up QEMU
-        if: steps.prepare-build.outputs.requires-emulation == 'true'
+        if: steps.prepare-build.outputs.REQUIRES_EMULATION == 'true'
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
@@ -59,7 +59,7 @@ jobs:
       - name: Set up docker buildx
         uses: docker/setup-buildx-action@v2
         with:
-          driver: ${{ steps.prepare-build.outputs.buildx-driver }}
+          driver: ${{ steps.prepare-build.outputs.BUILDX_DRIVER }}
 
       - name: Create nuget config
         run: |
@@ -96,8 +96,8 @@ jobs:
       - name: Set Image names and tags
         if: ${{ inputs.build-image }}
         run: |
-          echo "VERSIONED_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.version }}${{ steps.prepare-build.outputs.image-tag-suffix }}" >> $GITHUB_ENV  
-          echo "LATEST_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:latest${{ steps.prepare-build.outputs.image-tag-suffix }}" >> $GITHUB_ENV
+          echo "VERSIONED_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.version }}${{ steps.prepare-build.outputs.IMAGE_TAG_SUFFIX }}" >> $GITHUB_ENV  
+          echo "LATEST_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:latest${{ steps.prepare-build.outputs.IMAGE_TAG_SUFFIX }}" >> $GITHUB_ENV
 
       - name: Build and push to ECR
         if: ${{ inputs.build-image }}
