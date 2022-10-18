@@ -27,9 +27,9 @@ jobs:
         id: prepare-build
         run: |
           if [[ "${{ inputs.packagePath }}" == "" ]]; then
-            packagePath=./${{ inputs.packagePath }}
+            packagePath=./${{ inputs.packagePath }}.Package
           else
-            packagePath=./${{ inputs.packageName }}.Package
+            packagePath=./${{ inputs.packageName }}
           fi
           echo "Using package path: $packagePath"
           echo '::echo::on' 
