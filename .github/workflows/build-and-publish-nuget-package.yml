@@ -4,6 +4,9 @@ on:
       packageName:
         required: true
         type: string
+      packagePath:
+        required: false
+        type: string
       runUnitTests:
         required: true
         type: boolean
@@ -20,6 +23,18 @@ jobs:
   build_and_publish_nuget_package_job:
     runs-on: ubuntu-20.04
     steps:
+      - name: Prepare build parameters
+        id: prepare-build
+        run: |
+          if [[ "${{ inputs.packagePath }}" == "" ]]; then
+            packagePath=./${{ inputs.packagePath }}
+          else
+            packagePath=./${{ inputs.packageName }}.Package
+          fi
+          echo "Using package path: $packagePath"
+          echo '::echo::on' 
+          echo "PACKAGE_PATH=$packagePath" >> $GITHUB_OUTPUT
+
       - name: Check out the repo
         uses: actions/checkout@v3
 
@@ -34,13 +49,13 @@ jobs:
       - name: Run unit tests
         if: ${{ inputs.runUnitTests }}
         run: |  
-          cd ./${{ inputs.packageName }}.Package
+          cd ${{ steps.prepare-build.outputs.PACKAGE_PATH }}
           dotnet test ./${{ inputs.packageName }}.UnitTests
 
       - name: Run integration tests
         if: ${{ inputs.runIntegrationTests }}
         run: |  
-          cd ./${{ inputs.packageName }}.Package
+          cd ${{ steps.prepare-build.outputs.PACKAGE_PATH }}
           docker-compose -f ./docker-compose.yml up --build --force-recreate --exit-code-from integration-tests
         env:
           PAT_TOKEN: ${{secrets.patToken}}
@@ -48,6 +63,6 @@ jobs:
 
       - name: Generate & publish NuGet package
         run: |  
-          cd ./${{ inputs.packageName }}.Package
+          cd ${{ steps.prepare-build.outputs.PACKAGE_PATH }}
           dotnet pack -c Release -o out  
           dotnet nuget push ./out/*.nupkg --no-symbols --skip-duplicate
