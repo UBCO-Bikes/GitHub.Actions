@@ -1,0 +1,39 @@
+name: 🐳 Build and push docker image (NodeJS)
+on:
+  workflow_call:
+    inputs:
+      workflow-id:
+        required: false
+        type: string
+      image-name:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      npm-registry:
+        required: true
+        type: string
+      npm-auth-scope:
+        required: true
+        type: string
+    secrets:
+      npm-token:
+        required: true
+      gh-token:
+        required: false
+
+jobs:
+  build:
+    name: Build and publish docker image
+    uses: ./.github/workflows/node_shared_docker.yml
+    with:
+      workflow-id: ${{ inputs.workflow-id }}
+      image-name: ${{ inputs.image-name }}
+      version: ${{ inputs.version }}
+      push-to-registry: true
+      npm-registry: ${{ inputs.npm-registry }}
+      npm-auth-scope: ${{ inputs.npm-auth-scope }}
+    secrets:
+      npm-token: ${{ secrets.npm-token }}
+      gh-token: ${{ secrets.gh-token }}

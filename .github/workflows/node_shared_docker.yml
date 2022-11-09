@@ -1,0 +1,136 @@
+name: 🐳 Docker (NodeJS)
+on:
+  workflow_call:
+    inputs:
+      workflow-id:
+        required: false
+        type: string
+      image-name:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      push-to-registry:
+        required: false
+        type: boolean
+        default: true
+      npm-registry:
+        required: true
+        type: string
+      npm-auth-scope:
+        required: true
+        type: string
+    secrets:
+      npm-token:
+        required: true
+      gh-token:
+        required: false
+
+jobs:
+  docker:
+    name: 🐳 Docker
+    runs-on: ubuntu-20.04
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: 🛑 Cancel Previous Runs
+        if: ${{ inputs.workflow-id && secrets.gh-token }}
+        uses: styfle/cancel-workflow-action@0.11.0
+        with:
+          workflow_id: ${{ inputs.workflow-id }}
+          access_token: ${{ secrets.gh-token }}
+
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 🐳 Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm64,amd64
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: 🔑 Configure AWS credentials
+        if: ${{ inputs.push-to-registry }}
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::718142304254:role/GitHub-actions-shared-services
+          aws-region: ap-southeast-2
+
+      - name: 🔑 Login to Amazon ECR
+        if: ${{ inputs.push-to-registry }}
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: 🔐 Create npm config
+        run: |
+          echo "${{ inputs.npm-auth-scope }}:registry=https://${{ inputs.npm-registry }}" > .npmrc
+          echo "//${{ inputs.npm-registry }}/:_authToken=${{ secrets.npm-token }}" >> .npmrc
+
+      - name: 🐳 Docker build and push (multi-stage)
+        if: ${{ inputs.push-to-registry }}
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: |
+            linux/amd64
+            linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ inputs.version }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.version }}
+          secret-files: |
+            "npm_config=.npmrc"
+          cache-from: type=gha
+          cache-to: type=gha
+
+      - name: 🐳 Docker build and load
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: false
+          build-args: |
+            VERSION=${{ inputs.version }}
+          tags: |
+            ${{ inputs.image-name }}:${{ inputs.version }}
+          secret-files: |
+            "npm_config=.npmrc"
+          outputs: type=docker,dest=/tmp/docker-image.tar
+          cache-from: type=gha
+          cache-to: type=gha
+
+      - name: 📤 Upload docker image
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: /tmp/docker-image.tar
+          retention-days: 1
+
+      - name: 🗺️ Source maps
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: false
+          target: sourcemaps
+          build-args: |
+            VERSION=${{ inputs.version }}
+          outputs: type=local,dest=sourcemaps/
+          secret-files: |
+            "npm_config=.npmrc"
+          cache-from: type=gha
+          cache-to: type=gha
+
+      - name: 📤 Upload source maps
+        uses: actions/upload-artifact@v3
+        with:
+          name: sourcemaps
+          path: sourcemaps/
+
+      - name: Post 🔐 Create npm config
+        run: rm .npmrc
